@@ -1,0 +1,43 @@
+# ============================================================
+# .gitignore — CofRe — NUNCA suba estes arquivos no GitHub
+# ============================================================
+
+# Credenciais — NUNCA no Git
+.env
+.env.*
+!.env.example
+backend/.env
+backend/.env.*
+!backend/.env.example
+
+# Certificado EFÍ — NUNCA no Git
+*.p12
+*.pfx
+*.pem
+*.key
+certificado_base64.txt
+
+# Dependências
+node_modules/
+backend/node_modules/
+frontend/node_modules/
+
+# Build
+frontend/dist/
+frontend/.vite/
+frontend/build/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Sistema
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/settings.json
+.idea/
+
+# senhas/
+senhas/

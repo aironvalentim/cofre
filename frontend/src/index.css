@@ -1,0 +1,18 @@
+/* CofRe — estilos globais */
+*, *::before, *::after { box-sizing: border-box; }
+
+html {
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%; /* evita zoom de fonte no iOS */
+}
+
+body {
+  margin: 0;
+  background: #0a0c10;
+  overscroll-behavior: none; /* evita bounce no iOS */
+}
+
+/* Safe area para iPhones com notch */
+.cofre-bottomnav {
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
