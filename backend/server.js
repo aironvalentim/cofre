@@ -121,30 +121,23 @@ const EFI_CLIENT_SECRET = (process.env.EFI_CLIENT_SECRET||'').trim();
 let efiAgent;
 try {
   let certBuffer;
-  if (process.env.EFI_CERT_B64) {
-    // Produção: certificado como variável de ambiente base64
-    // Remove quebras de linha e espaços que o Render pode inserir no base64
-    const certB64Clean = process.env.EFI_CERT_B64.replace(/\s+/g, '');
-    certBuffer = Buffer.from(certB64Clean, 'base64');
-    console.log('✅ Certificado EFÍ carregado via EFI_CERT_B64, tamanho:', certBuffer.length, 'bytes');
+  if (process.env.EFI_CERT_B64_1) {
+    // Produção: certificado dividido em partes (limite Render gratuito)
+    const certB64 = [
+      process.env.EFI_CERT_B64_1,
+      process.env.EFI_CERT_B64_2,
+    ].filter(Boolean).join('').replace(/\s+/g, '');
+    certBuffer = Buffer.from(certB64, 'base64');
+    console.log('✅ Certificado EFÍ carregado via EFI_CERT_B64_1+2 |', certBuffer.length, 'bytes');
+  } else if (process.env.EFI_CERT_B64) {
+    certBuffer = Buffer.from(process.env.EFI_CERT_B64.replace(/\s+/g, ''), 'base64');
+    console.log('✅ Certificado EFÍ carregado via EFI_CERT_B64');
   } else {
-    // Desenvolvimento: certificado como arquivo local
     certBuffer = fs.readFileSync(path.resolve(__dirname, process.env.EFI_CERT_PATH||'./certificado.p12'));
     console.log('✅ Certificado EFÍ carregado via arquivo local');
   }
   efiAgent = new https.Agent({pfx:certBuffer,passphrase:'',rejectUnauthorized:false});
 } catch(e) { console.error('❌ Certificado EFÍ:',e.message); }
-
-let efiTokenCache = {token:null,expiresAt:0};
-async function getEfiToken() {
-  if(efiTokenCache.token && Date.now()<efiTokenCache.expiresAt-60000) return efiTokenCache.token;
-  const creds = Buffer.from(`${EFI_CLIENT_ID}:${EFI_CLIENT_SECRET}`).toString('base64');
-  const r = await axios.post(`${EFI_BASE}/oauth/token`,{grant_type:'client_credentials'},{
-    headers:{Authorization:`Basic ${creds}`,'Content-Type':'application/json'},httpsAgent:efiAgent,
-  });
-  efiTokenCache={token:r.data.access_token,expiresAt:Date.now()+r.data.expires_in*1000};
-  return efiTokenCache.token;
-}
 
 // ── Helpers ─────────────────────────────────────────────────
 const hashEmail = e => crypto.createHash('sha256').update(e.toLowerCase().trim()).digest('hex');
