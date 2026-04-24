@@ -123,8 +123,10 @@ try {
   let certBuffer;
   if (process.env.EFI_CERT_B64) {
     // Produção: certificado como variável de ambiente base64
-    certBuffer = Buffer.from(process.env.EFI_CERT_B64, 'base64');
-    console.log('✅ Certificado EFÍ carregado via EFI_CERT_B64');
+    // Remove quebras de linha e espaços que o Render pode inserir no base64
+    const certB64Clean = process.env.EFI_CERT_B64.replace(/\s+/g, '');
+    certBuffer = Buffer.from(certB64Clean, 'base64');
+    console.log('✅ Certificado EFÍ carregado via EFI_CERT_B64, tamanho:', certBuffer.length, 'bytes');
   } else {
     // Desenvolvimento: certificado como arquivo local
     certBuffer = fs.readFileSync(path.resolve(__dirname, process.env.EFI_CERT_PATH||'./certificado.p12'));
