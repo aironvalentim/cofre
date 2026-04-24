@@ -309,6 +309,7 @@ app.post('/api/auth/cadastro', authLimiter, [
     await query('INSERT INTO acessos_gratuitos (email_hash,primeiro_login_feito) VALUES (?,false) ON CONFLICT (email_hash) DO NOTHING',[eh]);
     res.status(201).json({mensagem:'Conta criada! Primeiro acesso é gratuito.'});
   } catch(e) {
+    console.error('❌ CADASTRO ERRO:', e.message, '| code:', e.code, '| detail:', e.detail);
     if(e.message.includes('ER_NO_SUCH_TABLE'))
       return res.status(500).json({erro:'Banco não inicializado. Execute schema.sql.'});
     res.status(500).json({erro:'Erro interno: '+e.message});
@@ -472,7 +473,8 @@ app.post('/api/auth/login', authLimiter, [
     query('INSERT INTO historico_sessoes (usuario_id,email_hash,ip_origem,user_agent,plano_ativo) VALUES (?,?,?,?,?)',
       [u.id,eh,ip,ua,planoNome]).catch(()=>{});
     res.json({token:tok,nome:u.nome,kdfSalt:u.kdf_salt,verifierIv:u.verifier_iv,verifierCt:u.verifier_ct});
-  } catch(e) {
+ } catch(e) {
+    console.error('❌ LOGIN ERRO:', e.message, '| code:', e.code, '| detail:', e.detail);
     if(e.message.includes('ER_NO_SUCH_TABLE')) return res.status(500).json({erro:'Banco não inicializado.'});
     res.status(500).json({erro:'Erro interno: '+e.message});
   }
