@@ -297,6 +297,16 @@ app.post('/api/auth/cadastro', authLimiter, [
   body('senhaMestra').isLength({min:8}),body('kdfSalt').isLength({min:64,max:64}),
   body('verifierIv').notEmpty(),body('verifierCt').notEmpty(),
 ], validar, async (req,res) => {
+  console.log('📝 CADASTRO body recebido:', JSON.stringify({
+    email: req.body.email,
+    temEmailEnc: !!req.body.emailEnc,
+    nome: req.body.nome,
+    sobrenome: req.body.sobrenome,
+    kdfSaltLen: req.body.kdfSalt?.length,
+    temVerifierIv: !!req.body.verifierIv,
+    temVerifierCt: !!req.body.verifierCt,
+    senhaMestraLen: req.body.senhaMestra?.length,
+  }));
   try {
     const {email,emailEnc,nome,sobrenome,senhaMestra,kdfSalt,verifierIv,verifierCt} = req.body;
     const eh = hashEmail(email);
