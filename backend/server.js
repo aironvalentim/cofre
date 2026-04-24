@@ -34,7 +34,7 @@ app.use(helmet({
       scriptSrc:    ["'self'"],
       styleSrc:     ["'self'","'unsafe-inline'"],
       imgSrc:       ["'self'","data:","https://logo.clearbit.com"],
-      connectSrc:   ["'self'"],
+      connectSrc:   ["'self'", 'https://cofre-five.vercel.app', 'https://cofre-backend.onrender.com'],
       fontSrc:      ["'self'","https://fonts.gstatic.com"],
       objectSrc:    ["'none'"],
       frameAncestors:["'none'"],
@@ -43,14 +43,26 @@ app.use(helmet({
   hsts:{maxAge:31536000,includeSubDomains:true},
   noSniff:true, referrerPolicy:{policy:'strict-origin-when-cross-origin'},
 }));
-app.use(cors({
-  origin: [
-    'http://localhost:5173',
-    'https://cofre-five.vercel.app'
-  ],
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  credentials: true
-}));
+const allowedOrigins = [
+  'http://localhost:5173',
+  'https://cofre-five.vercel.app',
+  process.env.FRONTEND_URL,
+].filter(Boolean);
+
+const corsOptions = {
+  origin: (origin, callback) => {
+    // Permitir requisições sem origin (ex: Render health check, mobile)
+    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+    callback(new Error('CORS: origem não permitida'));
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
+  optionsSuccessStatus: 200, // IE11 compat
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions)); // Responder preflight em todas as rotas
 app.set('trust proxy', 1); // Necessário para Render, Railway, Heroku
 app.use(express.json({limit:'128kb'}));
 app.use(rateLimit({windowMs:15*60*1000,max:200}));
