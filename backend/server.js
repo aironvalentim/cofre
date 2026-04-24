@@ -727,6 +727,30 @@ app.delete('/api/cofre/:id', autenticar, async (req,res) => {
   res.json({mensagem:'Removida.'});
 });
 
+// ROTA DE DEBUG TEMPORÁRIA — remover após resolver
+app.get('/api/debug-efi', async (req,res) => {
+  try {
+    const certB64 = process.env.EFI_CERT_B64 || '';
+    const certClean = certB64.replace(/\s+/g, '');
+    const clientId = (process.env.EFI_CLIENT_ID||'').trim();
+    const clientSecret = (process.env.EFI_CLIENT_SECRET||'').trim();
+    const certBuffer = Buffer.from(certClean, 'base64');
+    
+    res.json({
+      cert_b64_length: certB64.length,
+      cert_b64_clean_length: certClean.length,
+      cert_buffer_bytes: certBuffer.length,
+      client_id_length: clientId.length,
+      client_secret_length: clientSecret.length,
+      client_id_preview: clientId.substring(0,8)+'...',
+      efi_base: process.env.EFI_SANDBOX==='true'?'SANDBOX':'PRODUCAO',
+      pix_key: process.env.EFI_PIX_KEY,
+    });
+  } catch(e) {
+    res.status(500).json({erro: e.message});
+  }
+});
+
 app.listen(PORT,()=>{
   console.log(`🔒 CofRe rodando em http://localhost:${PORT}`);
   console.log(`💰 Acesso: R$${PRECO_ACESSO} | Mensal: R$${PRECO_MENSAL} | Anual: R$${PRECO_ANUAL}`);
