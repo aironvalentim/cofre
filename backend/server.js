@@ -51,12 +51,9 @@ const allowedOrigins = [
 
 const corsOptions = {
   origin: (origin, callback) => {
-    // Log para diagnóstico — remover após resolver
-    console.log('🌐 CORS origin recebida:', JSON.stringify(origin));
     if (!origin) return callback(null, true);
     const ok = allowedOrigins.some(o => o && origin.startsWith(o.replace(/\/$/, '')));
     if (ok) return callback(null, true);
-    console.log('❌ CORS bloqueado:', origin, '| lista:', allowedOrigins);
     callback(new Error('CORS bloqueado'));
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -117,7 +114,9 @@ const PRECO_MENSAL = parseFloat(process.env.PRECO_MENSAL||'34.90');
 const PRECO_ANUAL  = parseFloat(process.env.PRECO_ANUAL||'299.00');
 const EFI_BASE     = process.env.EFI_SANDBOX==='true'
   ? 'https://pix-h.api.efipay.com.br' : 'https://pix.api.efipay.com.br';
-const EFI_PIX_KEY  = process.env.EFI_PIX_KEY;
+const EFI_PIX_KEY       = (process.env.EFI_PIX_KEY||'').trim();
+const EFI_CLIENT_ID     = (process.env.EFI_CLIENT_ID||'').trim();
+const EFI_CLIENT_SECRET = (process.env.EFI_CLIENT_SECRET||'').trim();
 
 let efiAgent;
 try {
@@ -137,7 +136,7 @@ try {
 let efiTokenCache = {token:null,expiresAt:0};
 async function getEfiToken() {
   if(efiTokenCache.token && Date.now()<efiTokenCache.expiresAt-60000) return efiTokenCache.token;
-  const creds = Buffer.from(`${process.env.EFI_CLIENT_ID}:${process.env.EFI_CLIENT_SECRET}`).toString('base64');
+  const creds = Buffer.from(`${EFI_CLIENT_ID}:${EFI_CLIENT_SECRET}`).toString('base64');
   const r = await axios.post(`${EFI_BASE}/oauth/token`,{grant_type:'client_credentials'},{
     headers:{Authorization:`Basic ${creds}`,'Content-Type':'application/json'},httpsAgent:efiAgent,
   });
