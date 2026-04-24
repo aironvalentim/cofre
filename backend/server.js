@@ -51,14 +51,18 @@ const allowedOrigins = [
 
 const corsOptions = {
   origin: (origin, callback) => {
-    // Permitir requisições sem origin (ex: Render health check, mobile)
-    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
-    callback(new Error('CORS: origem não permitida'));
+    // Log para diagnóstico — remover após resolver
+    console.log('🌐 CORS origin recebida:', JSON.stringify(origin));
+    if (!origin) return callback(null, true);
+    const ok = allowedOrigins.some(o => o && origin.startsWith(o.replace(/\/$/, '')));
+    if (ok) return callback(null, true);
+    console.log('❌ CORS bloqueado:', origin, '| lista:', allowedOrigins);
+    callback(new Error('CORS bloqueado'));
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
-  optionsSuccessStatus: 200, // IE11 compat
+  optionsSuccessStatus: 200,
 };
 
 app.use(cors(corsOptions));
