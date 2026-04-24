@@ -1,6 +1,7 @@
 // ============================================================
-// backend/server.js — CofRe v6
+// backend/server.js — CofRe v6.1
 // Planos + TOTP Admin + Zero-Knowledge + Auditoria completa
+// FIX: Certificado EFÍ via EFI_CERT_B64 ou EFI_CERT_B64_1+_2
 // ============================================================
 import express    from 'express';
 import cors       from 'cors';
@@ -51,10 +52,9 @@ const allowedOrigins = [
 
 const corsOptions = {
   origin: (origin, callback) => {
-    if (!origin) return callback(null, true);
-    const ok = allowedOrigins.some(o => o && origin.startsWith(o.replace(/\/$/, '')));
-    if (ok) return callback(null, true);
-    callback(new Error('CORS bloqueado'));
+    console.log('🌐 CORS origin recebida:', JSON.stringify(origin));
+    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+    callback(new Error('CORS: origem não permitida'));
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
@@ -63,7 +63,7 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-app.options('*', cors(corsOptions)); // Responder preflight em todas as rotas
+app.options('*', cors(corsOptions));
 app.set('trust proxy', 1); // Necessário para Render, Railway, Heroku
 app.use(express.json({limit:'128kb'}));
 app.use(rateLimit({windowMs:15*60*1000,max:200}));
@@ -73,13 +73,11 @@ const pixLimiter   = rateLimit({windowMs:60*1000,max:30,    message:{erro:'Muita
 const adminLimiter = rateLimit({windowMs:15*60*1000,max:10, message:{erro:'Acesso admin bloqueado temporariamente.'}});
 
 // ── Banco ───────────────────────────────────────────────────
-// Supabase / PostgreSQL — usa DATABASE_URL (connection pooler)
-// ou variáveis individuais para dev local
 const db = new Pool(
   process.env.DATABASE_URL
     ? {
         connectionString: process.env.DATABASE_URL,
-        ssl: { rejectUnauthorized: false }, // Supabase exige SSL
+        ssl: { rejectUnauthorized: false },
       }
     : {
         host:     process.env.DB_HOST || 'localhost',
@@ -91,16 +89,13 @@ const db = new Pool(
       }
 );
 
-// Converte ? placeholders para $1, $2, $3... do PostgreSQL
-// e retorna [rows, fields] igual ao mysql2 para compatibilidade
 async function query(sql, params = []) {
   let i = 0;
-  const pgSql = sql.replace(/\?/g, () => `$${ ++i }`);
+  const pgSql = sql.replace(/\?/g, () => `${ ++i }`);
   const result = await db.query(pgSql, params);
   return [result.rows, result.fields];
 }
 
-// Testa conexão
 try {
   await query('SELECT 1 AS ok');
   console.log('✅ Banco PostgreSQL conectado!');
@@ -114,30 +109,49 @@ const PRECO_MENSAL = parseFloat(process.env.PRECO_MENSAL||'34.90');
 const PRECO_ANUAL  = parseFloat(process.env.PRECO_ANUAL||'299.00');
 const EFI_BASE     = process.env.EFI_SANDBOX==='true'
   ? 'https://pix-h.api.efipay.com.br' : 'https://pix.api.efipay.com.br';
-const EFI_PIX_KEY       = (process.env.EFI_PIX_KEY||'').trim();
-const EFI_CLIENT_ID     = (process.env.EFI_CLIENT_ID||'').trim();
-const EFI_CLIENT_SECRET = (process.env.EFI_CLIENT_SECRET||'').trim();
+const EFI_PIX_KEY  = process.env.EFI_PIX_KEY;
 
+// ── Certificado EFÍ ─────────────────────────────────────────
+// Suporta 3 formas:
+//   1. EFI_CERT_B64        — string base64 inteira (recomendado)
+//   2. EFI_CERT_B64_1 + EFI_CERT_B64_2 — dividida em 2 partes (Render limita tamanho de env)
+//   3. Arquivo local via EFI_CERT_PATH  — desenvolvimento local
 let efiAgent;
 try {
   let certBuffer;
-  if (process.env.EFI_CERT_B64_1) {
-    // Produção: certificado dividido em partes (limite Render gratuito)
-    const certB64 = [
-      process.env.EFI_CERT_B64_1,
-      process.env.EFI_CERT_B64_2,
-    ].filter(Boolean).join('').replace(/\s+/g, '');
-    certBuffer = Buffer.from(certB64, 'base64');
-    console.log('✅ Certificado EFÍ carregado via EFI_CERT_B64_1+2 |', certBuffer.length, 'bytes');
-  } else if (process.env.EFI_CERT_B64) {
-    certBuffer = Buffer.from(process.env.EFI_CERT_B64.replace(/\s+/g, ''), 'base64');
+  const b64_full  = process.env.EFI_CERT_B64;
+  const b64_part1 = process.env.EFI_CERT_B64_1;
+  const b64_part2 = process.env.EFI_CERT_B64_2;
+
+  if (b64_full) {
+    // Forma 1: variável única
+    certBuffer = Buffer.from(b64_full.replace(/\s+/g, ''), 'base64');
     console.log('✅ Certificado EFÍ carregado via EFI_CERT_B64');
+  } else if (b64_part1) {
+    // Forma 2: partes concatenadas (EFI_CERT_B64_1 + EFI_CERT_B64_2 + ...)
+    const parts = [b64_part1, b64_part2].filter(Boolean);
+    const b64concat = parts.map(p => p.replace(/\s+/g, '')).join('');
+    certBuffer = Buffer.from(b64concat, 'base64');
+    console.log(`✅ Certificado EFÍ carregado via EFI_CERT_B64_1+_2 (${b64concat.length} chars base64 → ${certBuffer.length} bytes)`);
   } else {
-    certBuffer = fs.readFileSync(path.resolve(__dirname, process.env.EFI_CERT_PATH||'./certificado.p12'));
-    console.log('✅ Certificado EFÍ carregado via arquivo local');
+    // Forma 3: arquivo local
+    const certPath = path.resolve(__dirname, process.env.EFI_CERT_PATH || './certificado.p12');
+    certBuffer = fs.readFileSync(certPath);
+    console.log('✅ Certificado EFÍ carregado via arquivo local:', certPath);
   }
   efiAgent = new https.Agent({pfx:certBuffer,passphrase:'',rejectUnauthorized:false});
 } catch(e) { console.error('❌ Certificado EFÍ:',e.message); }
+
+let efiTokenCache = {token:null,expiresAt:0};
+async function getEfiToken() {
+  if(efiTokenCache.token && Date.now()<efiTokenCache.expiresAt-60000) return efiTokenCache.token;
+  const creds = Buffer.from(`${process.env.EFI_CLIENT_ID}:${process.env.EFI_CLIENT_SECRET}`).toString('base64');
+  const r = await axios.post(`${EFI_BASE}/oauth/token`,{grant_type:'client_credentials'},{
+    headers:{Authorization:`Basic ${creds}`,'Content-Type':'application/json'},httpsAgent:efiAgent,
+  });
+  efiTokenCache={token:r.data.access_token,expiresAt:Date.now()+r.data.expires_in*1000};
+  return efiTokenCache.token;
+}
 
 // ── Helpers ─────────────────────────────────────────────────
 const hashEmail = e => crypto.createHash('sha256').update(e.toLowerCase().trim()).digest('hex');
@@ -172,6 +186,7 @@ async function verificarAssinatura(emailHash) {
 }
 
 async function criarCobrancaEfi(plano) {
+  if (!efiAgent) throw new Error('Certificado EFÍ não carregado. Verifique EFI_CERT_B64_1 e EFI_CERT_B64_2 no Render.');
   const token   = await getEfiToken();
   const txid    = `cofre${Date.now()}${crypto.randomBytes(5).toString('hex')}`.slice(0,35);
   const precos  = {por_acesso:PRECO_ACESSO,mensal:PRECO_MENSAL,anual:PRECO_ANUAL};
@@ -291,7 +306,6 @@ app.post('/api/auth/cadastro', authLimiter, [
     await query(
       `INSERT INTO usuarios (email_hash,email_enc,nome,sobrenome,senha_hash,kdf_salt,verifier_iv,verifier_ct)
        VALUES (?,?,?,?,?,?,?,?)`,[eh,emailEnc,nome,sobrenome,sh,kdfSalt,verifierIv,verifierCt]);
-    // Primeiro acesso gratuito — 0 = ainda não usou
     await query('INSERT INTO acessos_gratuitos (email_hash,primeiro_login_feito) VALUES (?,false) ON CONFLICT (email_hash) DO NOTHING',[eh]);
     res.status(201).json({mensagem:'Conta criada! Primeiro acesso é gratuito.'});
   } catch(e) {
@@ -314,7 +328,6 @@ app.post('/api/auth/verificar-acesso', authLimiter, [body('email').isEmail()], v
     const assin = await verificarAssinatura(eh);
     if(assin) return res.json({precisaPagar:false,planoAtivo:assin});
     const [gr]=await query('SELECT primeiro_login_feito FROM acessos_gratuitos WHERE email_hash=? LIMIT 1',[eh]);
-    // Se não há registro OU primeiro_login_feito=0 → ainda não usou o gratuito
     const primeiroUsado = gr.length && gr[0].primeiro_login_feito===true;
     res.json({precisaPagar:!!primeiroUsado,planoAtivo:null});
   } catch(e){res.json({precisaPagar:false,planoAtivo:null});}
@@ -344,6 +357,7 @@ app.post('/api/pix/criar-cobranca', authLimiter, [
     if(st===403) msg='API EFÍ: verifique escopos da aplicação (403).';
     if(st===401) msg='API EFÍ: credenciais inválidas (401).';
     if(st===400) msg=`API EFÍ: ${ed?.mensagem||'dados inválidos.'}`;
+    if(!efiAgent) msg='Certificado EFÍ não configurado no servidor. Verifique as variáveis EFI_CERT_B64_1/EFI_CERT_B64_2.';
     res.status(500).json({erro:msg});
   }
 });
@@ -355,6 +369,7 @@ app.get('/api/pix/status/:txid', pixLimiter, async (req,res) => {
     const [r]=await query('SELECT status,token_acesso,plano FROM cobrancas_pix WHERE txid=? LIMIT 1',[txid]);
     if(!r.length) return res.status(404).json({erro:'Cobrança não encontrada.'});
     if(r[0].status==='CONCLUIDA') return res.json({pago:true,tokenPix:r[0].token_acesso});
+    if(!efiAgent) return res.json({pago:false,erro:'Certificado não carregado.'});
     const token = await getEfiToken();
     const st = await axios.get(`${EFI_BASE}/v2/cob/${txid}`,{headers:{Authorization:`Bearer ${token}`},httpsAgent:efiAgent});
     const efiStatus = st.data.status;
@@ -408,7 +423,6 @@ app.post('/api/auth/login', authLimiter, [
     if(!rows.length||!senhaOk) return res.status(401).json({erro:'E-mail ou senha incorretos.'});
     const u=rows[0];
 
-    // Assinatura ativa (mensal/anual) — login livre
     const assin = await verificarAssinatura(eh);
     if(assin) {
       const tok=gerarJWT(u.id);
@@ -422,20 +436,16 @@ app.post('/api/auth/login', authLimiter, [
         planoAtivo:{nome:assin.nome,expiraEm:assin.expira_em}});
     }
 
-    // Primeiro acesso gratuito
     const [gr]=await query('SELECT primeiro_login_feito FROM acessos_gratuitos WHERE email_hash=? LIMIT 1',[eh]);
-    // Se não existe registro: trata como primeiro login (banco antigo)
     const primeiroUsado = gr.length ? gr[0].primeiro_login_feito===true : false;
 
     if(!primeiroUsado) {
-      // Libera grátis e marca como usado
       if(gr.length) {
         await query("UPDATE acessos_gratuitos SET primeiro_login_feito=true WHERE email_hash=?",[eh]);
       } else {
         await query('INSERT INTO acessos_gratuitos (email_hash,primeiro_login_feito) VALUES (?,true) ON CONFLICT (email_hash) DO NOTHING',[eh]);
       }
     } else {
-      // Precisa de tokenPix válido
       if(!tokenPix) return res.status(402).json({erro:'pagamento_necessario',mensagem:'Escolha um plano para continuar.'});
       const [cob]=await query(
         `SELECT id,plano,valor FROM cobrancas_pix
@@ -443,7 +453,6 @@ app.post('/api/auth/login', authLimiter, [
          AND pago_em > NOW() - INTERVAL '15 minutes' LIMIT 1`,[tokenPix,eh]);
       if(!cob.length) return res.status(402).json({erro:'pagamento_invalido',mensagem:'Pagamento não confirmado ou expirado.'});
       await query("UPDATE cobrancas_pix SET token_acesso=NULL WHERE token_acesso=?",[tokenPix]);
-      // Planos com duração → cria assinatura
       const cobPlano=cob[0].plano;
       if(cobPlano==='mensal'||cobPlano==='anual') {
         const [pi]=await query('SELECT id,duracao_dias FROM planos WHERE slug=? LIMIT 1',[cobPlano]);
@@ -474,7 +483,6 @@ app.post('/api/auth/login', authLimiter, [
 // ADMIN — SUPORTE A USUÁRIOS
 // ══════════════════════════════════════════════════════════
 
-// Busca usuário por email (sem expor dados sensíveis)
 app.post('/api/admin/buscar-usuario', autenticarAdmin, [
   body('email').isEmail(),
 ], validar, async (req, res) => {
@@ -529,8 +537,6 @@ app.post('/api/admin/buscar-usuario', autenticarAdmin, [
   } catch(e) { res.status(500).json({ erro: e.message }); }
 });
 
-// Libera acesso gratuito (permite login sem pagar — uso para suporte)
-// O usuário ainda precisa da SENHA MESTRA correta para entrar
 app.post('/api/admin/liberar-acesso', autenticarAdmin, [
   body('email').isEmail(),
   body('motivo').optional().isString(),
@@ -539,24 +545,18 @@ app.post('/api/admin/liberar-acesso', autenticarAdmin, [
     const eh = hashEmail(req.body.email);
     const [u] = await query('SELECT id FROM usuarios WHERE email_hash = ? AND ativo = true LIMIT 1', [eh]);
     if (!u.length) return res.status(404).json({ erro: 'Usuário não encontrado ou inativo.' });
-
-    // Reseta o primeiro_login_feito para 0 — próximo login é gratuito
     await query(
       'INSERT INTO acessos_gratuitos (email_hash, primeiro_login_feito) VALUES (?, false) ON CONFLICT (email_hash) DO UPDATE SET primeiro_login_feito = false',
       [eh]
     );
-
-    // Loga a ação admin
     console.log(`🔓 Admin liberou acesso para email_hash=${eh.substring(0,16)}... motivo: ${req.body.motivo||'suporte'}`);
-
     res.json({
       mensagem: 'Acesso liberado. O próximo login deste usuário será gratuito.',
-      instrucao: 'Oriente o usuário a tentar fazer login com sua senha mestra. Se ele esqueceu a senha mestra, os dados cifrados são irrecuperáveis por design de segurança.',
+      instrucao: 'Oriente o usuário a tentar fazer login com sua senha mestra.',
     });
   } catch(e) { res.status(500).json({ erro: e.message }); }
 });
 
-// Desativa conta de usuário (bloqueia acesso)
 app.post('/api/admin/desativar-usuario', autenticarAdmin, [
   body('email').isEmail(),
   body('motivo').notEmpty(),
@@ -570,7 +570,6 @@ app.post('/api/admin/desativar-usuario', autenticarAdmin, [
   } catch(e) { res.status(500).json({ erro: e.message }); }
 });
 
-// Reativa conta de usuário
 app.post('/api/admin/reativar-usuario', autenticarAdmin, [
   body('email').isEmail(),
 ], validar, async (req, res) => {
@@ -581,7 +580,6 @@ app.post('/api/admin/reativar-usuario', autenticarAdmin, [
   } catch(e) { res.status(500).json({ erro: e.message }); }
 });
 
-// Concede assinatura manual (sem pagamento — para testes ou compensação)
 app.post('/api/admin/conceder-assinatura', autenticarAdmin, [
   body('email').isEmail(),
   body('plano').isIn(['mensal', 'anual']),
@@ -594,7 +592,6 @@ app.post('/api/admin/conceder-assinatura', autenticarAdmin, [
     const [pi] = await query('SELECT id, duracao_dias FROM planos WHERE slug = ? LIMIT 1', [req.body.plano]);
     if (!pi.length) return res.status(404).json({ erro: 'Plano não encontrado.' });
     const expira = new Date(Date.now() + pi[0].duracao_dias * 86400 * 1000);
-    // Cancela assinatura ativa anterior
     await query("UPDATE assinaturas SET status = 'CANCELADA' WHERE email_hash = ? AND status = 'ATIVA'", [eh]);
     await query(
       "INSERT INTO assinaturas (email_hash, plano_id, expira_em, txid_origem) VALUES (?, ?, ?, 'admin-concedido')",
@@ -605,7 +602,6 @@ app.post('/api/admin/conceder-assinatura', autenticarAdmin, [
   } catch(e) { res.status(500).json({ erro: e.message }); }
 });
 
-// Lista todos os usuários (resumo)
 app.get('/api/admin/usuarios', autenticarAdmin, async (req, res) => {
   const [rows] = await query(`
     SELECT u.id, u.nome, u.sobrenome, u.criado_em, u.ativo,
@@ -720,33 +716,10 @@ app.delete('/api/cofre/:id', autenticar, async (req,res) => {
   res.json({mensagem:'Removida.'});
 });
 
-// ROTA DE DEBUG TEMPORÁRIA — remover após resolver
-app.get('/api/debug-efi', async (req,res) => {
-  try {
-    const certB64 = process.env.EFI_CERT_B64 || '';
-    const certClean = certB64.replace(/\s+/g, '');
-    const clientId = (process.env.EFI_CLIENT_ID||'').trim();
-    const clientSecret = (process.env.EFI_CLIENT_SECRET||'').trim();
-    const certBuffer = Buffer.from(certClean, 'base64');
-    
-    res.json({
-      cert_b64_length: certB64.length,
-      cert_b64_clean_length: certClean.length,
-      cert_buffer_bytes: certBuffer.length,
-      client_id_length: clientId.length,
-      client_secret_length: clientSecret.length,
-      client_id_preview: clientId.substring(0,8)+'...',
-      efi_base: process.env.EFI_SANDBOX==='true'?'SANDBOX':'PRODUCAO',
-      pix_key: process.env.EFI_PIX_KEY,
-    });
-  } catch(e) {
-    res.status(500).json({erro: e.message});
-  }
-});
-
 app.listen(PORT,()=>{
   console.log(`🔒 CofRe rodando em http://localhost:${PORT}`);
   console.log(`💰 Acesso: R$${PRECO_ACESSO} | Mensal: R$${PRECO_MENSAL} | Anual: R$${PRECO_ANUAL}`);
   console.log(`🏦 EFÍ: ${process.env.EFI_SANDBOX==='true'?'SANDBOX':'PRODUÇÃO'} | Chave: ${EFI_PIX_KEY}`);
+  if(!efiAgent) console.log('⚠️  Certificado EFÍ NÃO carregado! Verifique EFI_CERT_B64_1 e EFI_CERT_B64_2 no Render.');
   if(!process.env.ADMIN_TOTP_SECRET) console.log('⚠️  TOTP não configurado — acesse /api/admin/totp-setup');
 });
