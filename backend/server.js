@@ -44,13 +44,12 @@ app.use(helmet({
   noSniff:true, referrerPolicy:{policy:'strict-origin-when-cross-origin'},
 }));
 app.use(cors({
-  origin:(origin,cb)=>{
-    const allowed=(process.env.FRONTEND_URL||'http://localhost:5173').split(',');
-    if(!origin||allowed.includes(origin)) return cb(null,true);
-    cb(new Error('CORS bloqueado'));
-  },
-  methods:['GET','POST','PUT','DELETE','PATCH'],
-  allowedHeaders:['Content-Type','Authorization'],
+  origin: [
+    'http://localhost:5173',
+    'https://cofre-five.vercel.app'
+  ],
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  credentials: true
 }));
 app.set('trust proxy', 1); // Necessário para Render, Railway, Heroku
 app.use(express.json({limit:'128kb'}));
