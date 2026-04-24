@@ -9,7 +9,7 @@ import {
   criptografarCredencial, descriptografarCredencial,
 } from './services/crypto';
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const API = import.meta.env.VITE_API_URL || 'https://cofre-backend.onrender.com/api';
 
 // ══════════════════════════════════════════════════════════
 // TEMAS — 4 perfis validados pelo mercado (GitHub, Linear, Notion)

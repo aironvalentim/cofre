@@ -10,7 +10,7 @@ cd backend
 npm install
 npm run dev
 ```
-Deve aparecer: `🔒 CofRe rodando em http://localhost:3001`
+Deve aparecer: `🔒 CofRe rodando em https://cofre-backend.onrender.com`
 
 ## 3. Frontend
 ```

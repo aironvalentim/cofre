@@ -128,10 +128,10 @@ Após ter a URL do backend do Render, atualize a linha do App.jsx:
 
 ```javascript
 // Linha atual (desenvolvimento):
-const API = 'http://localhost:3001/api';
+const API = 'https://cofre-backend.onrender.com/api';
 
 // Altere para (produção):
-const API = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const API = import.meta.env.VITE_API_URL || 'https://cofre-backend.onrender.com/api';
 ```
 
 ---
