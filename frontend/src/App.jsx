@@ -336,7 +336,7 @@ function TelaLogin({onCadastro,onVoltar}){
   useEffect(()=>{
     if(tela!=='pix'||pixPago||!pixData)return;
     const p=setInterval(async()=>{
-      try{const r=await fetch(`${API}/pix/status/${pixData.txid}`);const d=await r.json();
+      try{const r=await fetch(`${API}/api/pix/status/${pixData.txid}`);const d=await r.json();
         if(d.pago){setPixPago(true);setTokenPix(d.tokenPix);clearInterval(p);}
         if(d.expirou)clearInterval(p);}catch{}},3000);
     return()=>clearInterval(p);
@@ -361,7 +361,7 @@ function TelaLogin({onCadastro,onVoltar}){
   async function handleEscolherPlano(plano){
     setPlanoSel(plano);setLoad(true);setErro('');
     try{
-      const res=await fetch(`${API}/pix/criar-cobranca`,{method:'POST',headers:{'Content-Type':'application/json'},
+      const res=await fetch(`${API}/api/pix/criar-cobranca`,{method:'POST',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({email:email.toLowerCase().trim(),plano})});
       const data=await res.json();
       if(!res.ok)throw new Error(data.erro||'Erro ao gerar Pix');
