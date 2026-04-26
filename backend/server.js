@@ -91,8 +91,9 @@ const db = new Pool(
 
 async function query(sql, params = []) {
   let i = 0;
-  const pgSql = sql.replace(/\?/g, () => `${ ++i }::text`);
-  const result = await db.query(pgSql, params);
+  const pgSql = sql.replace(/\?/g, () => `${ ++i }`);
+  const castedParams = params.map(p => (typeof p === 'number' && !Number.isInteger(p)) ? p : p === null ? null : String(p));
+  const result = await db.query(pgSql, castedParams);
   return [result.rows, result.fields];
 }
 
