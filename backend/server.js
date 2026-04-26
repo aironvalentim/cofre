@@ -92,9 +92,13 @@ const db = new Pool(
 async function query(sql, params = []) {
   let i = 0;
   const pgSql = sql.replace(/\?/g, () => `${ ++i }`);
-  const castedParams = params.map(p => (typeof p === 'number' && !Number.isInteger(p)) ? p : p === null ? null : String(p));
-  const result = await db.query(pgSql, castedParams);
-  return [result.rows, result.fields];
+  try {
+    const result = await db.query(pgSql, params);
+    return [result.rows, result.fields];
+  } catch(e) {
+    console.error('❌ SQL ERRO:', pgSql.substring(0,120), '| params tipos:', params.map(p => `${typeof p}(${p})`).join(', '));
+    throw e;
+  }
 }
 
 try {
