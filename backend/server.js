@@ -92,8 +92,14 @@ const db = new Pool(
 async function query(sql, params = []) {
   let i = 0;
   const pgSql = sql.replace(/\?/g, () => `${ ++i }`);
-  const result = await db.query(pgSql, params);
-  return [result.rows, result.fields];
+  try {
+    const result = await db.query(pgSql, params);
+    return [result.rows, result.fields];
+  } catch(e) {
+    console.error("? SQL ERRO:", pgSql.substring(0,150));
+    console.error("   params:", params.map((p,idx)=>`${idx+1}=${typeof p}(${String(p).substring(0,40)})`).join(", "));
+    throw e;
+  }
 }
 
 try {
