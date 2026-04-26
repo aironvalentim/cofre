@@ -322,7 +322,7 @@ function TelaLogin({onCadastro,onVoltar}){
   const [copiado,setCopiado]=useState(false);
   const [tempoExp,setTempoExp]=useState(600);
 
-  useEffect(()=>{fetch(`${API}/api/planos`).then(r=>r.json()).then(setPlanos).catch(()=>{});},[]);
+  useEffect(()=>{fetch(`${API}/planos`).then(r=>r.json()).then(setPlanos).catch(()=>{});},[]);
 
   // Contador
   useEffect(()=>{
