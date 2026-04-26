@@ -92,13 +92,8 @@ const db = new Pool(
 async function query(sql, params = []) {
   let i = 0;
   const pgSql = sql.replace(/\?/g, () => `${ ++i }`);
-  try {
-    const result = await db.query(pgSql, params);
-    return [result.rows, result.fields];
-  } catch(e) {
-    console.error('❌ SQL ERRO:', pgSql.substring(0,120), '| params tipos:', params.map(p => `${typeof p}(${p})`).join(', '));
-    throw e;
-  }
+  const result = await db.query(pgSql, params);
+  return [result.rows, result.fields];
 }
 
 try {
@@ -302,16 +297,6 @@ app.post('/api/auth/cadastro', authLimiter, [
   body('senhaMestra').isLength({min:8}),body('kdfSalt').isLength({min:64,max:64}),
   body('verifierIv').notEmpty(),body('verifierCt').notEmpty(),
 ], validar, async (req,res) => {
-  console.log('📝 CADASTRO body recebido:', JSON.stringify({
-    email: req.body.email,
-    temEmailEnc: !!req.body.emailEnc,
-    nome: req.body.nome,
-    sobrenome: req.body.sobrenome,
-    kdfSaltLen: req.body.kdfSalt?.length,
-    temVerifierIv: !!req.body.verifierIv,
-    temVerifierCt: !!req.body.verifierCt,
-    senhaMestraLen: req.body.senhaMestra?.length,
-  }));
   try {
     const {email,emailEnc,nome,sobrenome,senhaMestra,kdfSalt,verifierIv,verifierCt} = req.body;
     const eh = hashEmail(email);
@@ -324,7 +309,6 @@ app.post('/api/auth/cadastro', authLimiter, [
     await query('INSERT INTO acessos_gratuitos (email_hash,primeiro_login_feito) VALUES (?,false) ON CONFLICT (email_hash) DO NOTHING',[eh]);
     res.status(201).json({mensagem:'Conta criada! Primeiro acesso é gratuito.'});
   } catch(e) {
-    console.error('❌ CADASTRO ERRO:', e.message, '| code:', e.code, '| detail:', e.detail);
     if(e.message.includes('ER_NO_SUCH_TABLE'))
       return res.status(500).json({erro:'Banco não inicializado. Execute schema.sql.'});
     res.status(500).json({erro:'Erro interno: '+e.message});
@@ -488,8 +472,7 @@ app.post('/api/auth/login', authLimiter, [
     query('INSERT INTO historico_sessoes (usuario_id,email_hash,ip_origem,user_agent,plano_ativo) VALUES (?,?,?,?,?)',
       [u.id,eh,ip,ua,planoNome]).catch(()=>{});
     res.json({token:tok,nome:u.nome,kdfSalt:u.kdf_salt,verifierIv:u.verifier_iv,verifierCt:u.verifier_ct});
- } catch(e) {
-    console.error('❌ LOGIN ERRO:', e.message, '| code:', e.code, '| detail:', e.detail);
+  } catch(e) {
     if(e.message.includes('ER_NO_SUCH_TABLE')) return res.status(500).json({erro:'Banco não inicializado.'});
     res.status(500).json({erro:'Erro interno: '+e.message});
   }
