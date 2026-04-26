@@ -91,7 +91,7 @@ const db = new Pool(
 
 async function query(sql, params = []) {
   let i = 0;
-  const pgSql = sql.replace(/\?/g, () => `${ ++i }`);
+  const pgSql = sql.replace(/\?/g, () => `${ ++i }::text`);
   const result = await db.query(pgSql, params);
   return [result.rows, result.fields];
 }
