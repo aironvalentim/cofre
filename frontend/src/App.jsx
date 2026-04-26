@@ -336,7 +336,7 @@ function TelaLogin({onCadastro,onVoltar}){
   useEffect(()=>{
     if(tela!=='pix'||pixPago||!pixData)return;
     const p=setInterval(async()=>{
-      try{const r=await fetch(`${API}/api/pix/status/${pixData.txid}`);const d=await r.json();
+      try{const r=await fetch(`${API}/pix/status/${pixData.txid}`);const d=await r.json();
         if(d.pago){setPixPago(true);setTokenPix(d.tokenPix);clearInterval(p);}
         if(d.expirou)clearInterval(p);}catch{}},3000);
     return()=>clearInterval(p);
@@ -348,7 +348,7 @@ function TelaLogin({onCadastro,onVoltar}){
     if(senha.length<8){setErro('Senha deve ter no mínimo 8 caracteres.');return;}
     setLoad(true);
     try{
-      const res=await fetch(`${API}/api/auth/login`,{method:'POST',headers:{'Content-Type':'application/json'},
+      const res=await fetch(`${API}/auth/login`,{method:'POST',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({email:email.toLowerCase().trim(),senhaMestra:senha})});
       const data=await res.json();
       if(res.status===402&&data.erro==='pagamento_necessario'){setTela('planos');return;}
@@ -361,7 +361,7 @@ function TelaLogin({onCadastro,onVoltar}){
   async function handleEscolherPlano(plano){
     setPlanoSel(plano);setLoad(true);setErro('');
     try{
-      const res=await fetch(`${API}/api/pix/criar-cobranca`,{method:'POST',headers:{'Content-Type':'application/json'},
+      const res=await fetch(`${API}/pix/criar-cobranca`,{method:'POST',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({email:email.toLowerCase().trim(),plano})});
       const data=await res.json();
       if(!res.ok)throw new Error(data.erro||'Erro ao gerar Pix');
@@ -373,7 +373,7 @@ function TelaLogin({onCadastro,onVoltar}){
   async function handleLoginComPix(){
     setLoad(true);
     try{
-      const res=await fetch(`${API}/api/auth/login`,{method:'POST',headers:{'Content-Type':'application/json'},
+      const res=await fetch(`${API}/auth/login`,{method:'POST',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({email:email.toLowerCase().trim(),senhaMestra:senha,tokenPix,plano:planoSel})});
       const data=await res.json();
       if(!res.ok){setErro(data.erro||'Erro.');setTela('login');return;}
@@ -553,7 +553,7 @@ function TelaCadastro({onLogin,onVoltar}){
       const salt=gerarSalt();const chave=await derivarChave(f.pw,salt);
       const ver=JSON.parse(await gerarVerifier(chave));
       const emailEnc=await criptografar(en,chave);
-      await fetch(`${API}/api/auth/cadastro`,{method:'POST',headers:{'Content-Type':'application/json'},
+      await fetch(`${API}/auth/cadastro`,{method:'POST',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({email:en,emailEnc,nome:f.nome,sobrenome:f.sob,senhaMestra:f.pw,kdfSalt:salt,verifierIv:ver.iv,verifierCt:ver.ct})})
         .then(async r=>{const d=await r.json();if(!r.ok)throw new Error(d.erro);});
       setMsg({t:'ok',m:'Conta criada! Redirecionando…'});
