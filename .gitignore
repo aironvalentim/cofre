@@ -41,3 +41,19 @@ Thumbs.db
 
 # senhas/
 senhas/
+
+# cert/
+backend/cert.txt
+
+#deploy/
+DEPLOY.md
+
+#migracao_banco.sql/
+MIGRACAO_BANCO.sql
+
+#SEGURAN#U00c7A.md
+SEGURAN#U00c7A.md
+
+#SEGURANÇA.md
+SEGURANÇA.md
+
