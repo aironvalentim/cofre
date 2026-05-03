@@ -1,0 +1,19 @@
+# render.yaml — Configuração do Render.com
+# Coloque este arquivo na raiz do repositório
+services:
+  - type: web
+    name: cofre-backend
+    runtime: node
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      # As demais variáveis configure manualmente no painel do Render
+      # DB_HOST, DB_USER, DB_PASS, DB_NAME, JWT_SECRET,
+      # EFI_CLIENT_ID, EFI_CLIENT_SECRET, EFI_CERT_B64,
+      # EFI_PIX_KEY, PRECO_ACESSO, PRECO_MENSAL, PRECO_ANUAL,
+      # ADMIN_SENHA, ADMIN_TOTP_SECRET, FRONTEND_URL
